@@ -28,7 +28,7 @@ class Memory:
         self.__memory: dict[int, int] = {}
 
     def __getitem__(self, index: int | list[int]) -> int:
-        
+
         offset = index[0]
         if type(offset) == type([]):
             offset = self.__memory[offset[0]]
@@ -56,10 +56,11 @@ class Memory:
 memory: Final[Memory] = Memory()
 root_sequence: list = []  # This will hold the root sequence of instructions.
 
+
 class Instruction:
     """A class to represent an instruction in the Justif language."""
 
-    def Value(self, data, index: int):
+    def Value(self, data: int | str | list, index: int):
         """_summary_
 
         Args:
@@ -85,71 +86,8 @@ class Instruction:
                 type(self.source)
             )
 
-    def Assign(self, index: int) -> int:
-        """This method assigns a value to the current target memory location.
-
-        Args:
-            index (int): The index to retrieve the value from the source.
-
-        Returns:
-            int: The value assigned to the target memory location.
-        """
-        memory[self.target] = self.Value(self.source, index)
-        return memory[self.target]
-
-    def Add(self, index: int) -> int:
-        """_summary_
-
-        Args:
-            index (_type_): _description_
-
-        Returns:
-            _type_: _description_
-        """
-        value = self.Value(self.source, index)
-        logger.debug("Add {} to {}", value, memory[self.target])
-        memory[self.target] += value
-        return memory[self.target]
-
-    def Subtract(self, index: int) -> int:
-        """_summary_
-
-        Args:
-            index (_type_): _description_
-
-        Returns:
-            _type_: _description_
-        """
-        memory[self.target] -= self.Value(self.source, index)
-        return memory[self.target]
-
-    def Multiply(self, index: int) -> int:
-        """_summary_
-
-        Args:
-            index (_type_): _description_
-
-        Returns:
-            _type_: _description_
-        """
-        memory[self.target] *= self.Value(self.source, index)
-        return memory[self.target]
-
-    def Divide(self, index: int) -> int:
-        """_summary_
-
-        Args:
-            index (_type_): _description_
-
-        Returns:
-            _type_: _description_
-        """
-        memory[self.target] /= self.Value(self.source, index)
-        return memory[self.target]
-
-
     def If(self, index: int) -> bool:
-        if type(self.address) == type(self):
+        if isinstance(self.address, Instruction) or type(self.address) == type(self):
             result = self.address.Execute(index)
         else:
             result = memory[self.address]
@@ -159,21 +97,27 @@ class Instruction:
         else:
             return ExecuteInstructionSequence(self.if_false, index)
 
-    def IsIndex(self, index: int) -> bool:
-        """_summary_
+
+class CheckIndexInstruction(Instruction):
+    """A class to represent a constant instruction in the Justif language"""
+
+    def __init__(self, value: int | str | list):
+        self.__value: Final[int | str | list] = value
+
+    def Execute(self, index: int) -> int:
+        """Execute the constant instruction.
 
         Args:
-            index (_type_): _description_
+            index (int): *ignored*
 
         Returns:
-            _type_: _description_
+            int: returns the constant value.
         """
-        return index == self.Value(self.value, index)
-
-
+        return index == self.Value(self.__value, index)
+    
 class ConstantInstruction(Instruction):
-    """A class to represent a constant instruction in the Justif language
-    """
+    """A class to represent a constant instruction in the Justif language"""
+
     def __init__(self, decint: int):
         self.__value: Final[int] = decint
 
@@ -188,13 +132,14 @@ class ConstantInstruction(Instruction):
         """
         return self.__value
 
+
 class InputInstruction(Instruction):
-    """A class to represent an input instruction in the Justif language.
-    """
+    """A class to represent an input instruction in the Justif language."""
+
     def __init__(self, address: int):
         self.__address: Final[int] = address
         """Address at which to store the input value."""
-        
+
     def Execute(self, _: int) -> int:
         """Execute the input instruction.
 
@@ -203,9 +148,10 @@ class InputInstruction(Instruction):
         """
         raise RuntimeError("Not implemented yet")
 
+
 class RecurseInstruction(Instruction):
-    """A class to represent a recursion instruction in the Justif language.
-    """
+    """A class to represent a recursion instruction in the Justif language."""
+
     def __init__(self, index: int):
         self.__index: Final[int] = index
 
@@ -222,9 +168,10 @@ class RecurseInstruction(Instruction):
         logger.debug("Call self recursively with index {}", self.__index)
         return ExecuteInstructionSequence(root_sequence, self.__index)
 
+
 class OutputCharInstruction(Instruction):
-    """A class to represent a char output instruction in the Justif language.
-    """
+    """A class to represent a char output instruction in the Justif language."""
+
     def __init__(self, address: int):
         self.__value: Final[int] = address
 
@@ -240,9 +187,10 @@ class OutputCharInstruction(Instruction):
         sys.stdout.write(chr(memory[self.__value]))
         return 1
 
+
 class OutputIntegerInstruction(Instruction):
-    """A class to represent a char output instruction in the Justif language.
-    """
+    """A class to represent a char output instruction in the Justif language."""
+
     def __init__(self, address: int):
         self.__value: Final[int] = address
 
@@ -258,33 +206,69 @@ class OutputIntegerInstruction(Instruction):
         sys.stdout.write(str(memory[self.__value]))
         return 1
 
+
 class ComparisonInstruction(Instruction):
-    """A class to represent a char output instruction in the Justif language.
-    """
-    def __init__(self, first: int, second: int, method_to_execute: str):
-        self.__first: Final[int] = first
-        self.__second: Final[int] = second
+    """A class to represent a char output instruction in the Justif language."""
+
+    def __init__(
+        self, first: int | str | list, second: int | str | list, method_to_execute: str
+    ):
+        self.__first: Final[int | str | list] = first
+        self.__second: Final[int | str | list] = second
         self.__method_to_execute: Final[str] = method_to_execute
 
     def Execute(self, index: int) -> int:
         a = self.Value(self.__first, index)
         b = self.Value(self.__second, index)
         match self.__method_to_execute:
-            case '+':
+            case "+":
                 logger.debug("Executing less than comparison: {} < {}", a, b)
                 return a < b
-            case '-':
+            case "-":
                 logger.debug("Executing equal to comparison: {} == {}", a, b)
                 return a == b
-            case '*':
+            case "*":
                 logger.debug("Executing greater than comparison: {} > {}", a, b)
                 return a > b
-            case '/':
+            case "/":
                 logger.debug("Executing not equal to comparison: {} != {}", a, b)
                 return a != b
             case _:
                 logger.error("Unknown comparison method: {}", self.__method_to_execute)
-                raise RuntimeError(f"Unknown comparison method: {self.__method_to_execute}")
+                raise RuntimeError(
+                    f"Unknown comparison method: {self.__method_to_execute}"
+                )
+
+
+class MemsetInstruction(Instruction):
+    """A class to represent a char output instruction in the Justif language."""
+
+    def __init__(self, source: int | str, target: int, method_to_execute: str):
+        self.__source: Final[int | str] = source
+        self.__target: Final[int] = target
+        self.__method_to_execute: Final[str] = method_to_execute
+
+    def Execute(self, index: int) -> int:
+        match self.__method_to_execute:
+            case "=":
+                memory[self.__target] = self.Value(self.__source, index)
+                return memory[self.__target]
+            case "+":
+                memory[self.__target] += self.Value(self.__source, index)
+                return memory[self.__target]
+            case "-":
+                memory[self.__target] -= self.Value(self.__source, index)
+                return memory[self.__target]
+            case "*":
+                memory[self.__target] *= self.Value(self.__source, index)
+                return memory[self.__target]
+            case "/":
+                memory[self.__target] /= self.Value(self.__source, index)
+                return memory[self.__target]
+            case _:
+                logger.error("Unknown memset method: {}", self.__method_to_execute)
+                raise RuntimeError(f"Unknown memset method: {self.__method_to_execute}")
+
 
 def ExecuteInstructionSequence(instructions: list[Instruction], index: int) -> int:
     """Execute a sequence of instructions.
@@ -303,12 +287,11 @@ def ExecuteInstructionSequence(instructions: list[Instruction], index: int) -> i
 
 
 class JustifParser:
-    """A parser for the Justif language.
-    """
-    
+    """A parser for the Justif language."""
+
     def __init__(self):
         self.expression: str = ""
-        self.pos: int = 0
+        self.__pos: int = 0
         self.__nums: list[int] = [-1, -1]
 
     def Parse(self, expression: str) -> list[Instruction] | None:
@@ -321,19 +304,20 @@ class JustifParser:
             list[Instruction]: The instructions parsed from the expression.
         """
         self.expression = expression
-        self.pos = 0
+        self.__pos = 0
         self.__nums = [-1, -1]
         return self.__parse_instructions()
 
     def __skip_whitespaces(self) -> None:
         """Skip whitespace characters in the expression.
-        This method advances the position in the expression until a non-whitespace character is found."""
+        This method advances the position in the expression until a non-whitespace character is found.
+        """
         try:
             while (
-                self.expression[self.pos]
+                self.expression[self.__pos]
                 in " \r\nABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
             ):
-                self.pos += 1
+                self.__pos += 1
         except IndexError:
             pass
 
@@ -343,7 +327,7 @@ class JustifParser:
         Returns:
             tuple[int, list[int]]: (current position, copy of __nums)
         """
-        return self.pos, self.__nums[:]
+        return self.__pos, self.__nums[:]
 
     def __restore_state(self, previously_saved_pos: tuple[int, list[int]]) -> None:
         """Restore the previously saved position and numbers from a local variable
@@ -351,7 +335,7 @@ class JustifParser:
         Args:
             s (_tytuple[int, list[int]]pe_):(previous position, copy of previous __nums)
         """
-        self.pos = previously_saved_pos[0]
+        self.__pos = previously_saved_pos[0]
         self.__nums = previously_saved_pos[1]
 
     def __get_char(self) -> str:
@@ -362,13 +346,13 @@ class JustifParser:
         """
         self.__skip_whitespaces()
         try:
-            result = self.expression[self.pos]
+            result = self.expression[self.__pos]
             assert isinstance(result, str), "Expected a string character"
             logger.debug("GetChar: {!r}", result)
             return result
         except IndexError:
             pass
-        return '\0'
+        return "\0"
 
     def __skip_char(self, expression: str) -> bool:
         """_summary_
@@ -381,36 +365,33 @@ class JustifParser:
         """
         self.__skip_whitespaces()
         try:
-            if self.expression[self.pos : self.pos + len(expression)] == expression:
-                self.pos += len(expression)
+            if self.expression[self.__pos : self.__pos + len(expression)] == expression:
+                self.__pos += len(expression)
                 return True
         except IndexError:
             pass
         return False
 
-    def ISINDEX(self):
+    def __is_index(self) :
         state = self.__save_state()
         if self.__skip_char("~"):
-            value = self.__dec_int()
-            if value is None:
-                value = self.parse_memory_access()
-            if value is not None:
-                result = Instruction()
-                result.value = value
-                result.Execute = result.IsIndex
-                return result
+            v: int | str | list | None  = self.__dec_int()
+            if v is None:
+                v = self.__indirect_memory_access()
+            if v is not None:
+                return CheckIndexInstruction(v)
         self.__restore_state(state)
 
     def __cmp_instruction(self) -> Instruction | None:
         state = self.__save_state()
         c = self.__get_char()
         if c in "+-*/":
-            self.pos += 1
-            m = self.parse_memory_access()
+            self.__pos += 1
+            m = self.__indirect_memory_access()
             if m is not None and self.__skip_char("="):
-                v = self.__dec_int()
+                v: int | str | list | None = self.__dec_int()
                 if v is None:
-                    v = self.parse_memory_access()
+                    v = self.__indirect_memory_access()
                 if v is not None:
                     return ComparisonInstruction(m, v, c)
         self.__restore_state(state)
@@ -418,13 +399,13 @@ class JustifParser:
 
     def IF(self):
         state = self.__save_state()
-        m = self.parse_memory_access()
+        m: int | str | list | Instruction = self.__indirect_memory_access()
         if m is None:
             m = self.__cmp_instruction()
         if m is None:
             m = self.__recursion()
         if m is None:
-            m = self.ISINDEX()
+            m = self.__is_index()
         if m is not None and self.__skip_char("?"):
             if_true = self.__parse_instructions()
             if if_true and self.__skip_char(":"):
@@ -446,7 +427,7 @@ class JustifParser:
         """
         state = self.__save_state()
         if self.__skip_char("<"):
-            address = self.parse_memory_access()
+            address = self.__indirect_memory_access()
             if address:
                 return InputInstruction(address)
         self.__restore_state(state)
@@ -460,12 +441,12 @@ class JustifParser:
         """
         state = self.__save_state()
         if self.__skip_char(">"):
-            address = self.parse_memory_access()
+            address = self.__indirect_memory_access()
             if address is not None:
                 return OutputCharInstruction(address)
 
         elif self.__skip_char("!"):
-            address = self.parse_memory_access()
+            address = self.__indirect_memory_access()
             if address is not None:
                 return OutputIntegerInstruction(address)
 
@@ -526,22 +507,31 @@ class JustifParser:
             return ConstantInstruction(decint)
         return None
 
-    def STRING(self):
+    def __string(self) -> str | None:
+        """Get a string from the current expression.
+
+        Raises:
+            SyntaxError: Raised if the string is not properly terminated.
+
+        Returns:
+            str | None: The string parsed from the expression, or None if no string is found.
+        """
         if self.__skip_char('"'):
-            startpos = self.pos
+            startpos = self.__pos
             while 1:
                 c = self.__get_char()
-                if c == 0:
+                if c == "\0":
                     raise SyntaxError("Expected end-of-string")
-                self.pos += 1
+                self.__pos += 1
                 if c == '"':
-                    return self.expression[startpos : self.pos - 1]
+                    return self.expression[startpos : self.__pos - 1]
+        return None
 
     def __recursion(self) -> Instruction | None:
         """_summary_
 
         Returns:
-            Instruction | None: 
+            Instruction | None:
         """
         state = self.__save_state()
         if self.__skip_char("="):
@@ -558,64 +548,54 @@ class JustifParser:
             Instruction | None: _description_
         """
         state = self.__save_state()
-        m = self.parse_memory_access()
+        m = self.__indirect_memory_access()
         if m:
             c = self.__get_char()
             if c in "=+-*/":
-                self.pos += 1
-                d = self.__dec_int()
+                self.__pos += 1
+                d: int | str | list | None = self.__dec_int()
                 if d is None:
-                    d = self.STRING()
+                    d = self.__string()
                 if d is None:
-                    d = self.parse_memory_access()
+                    d = self.__indirect_memory_access()
                 if d is not None:
-                    result = Instruction()
-                    result.source = d
-                    result.operation = c
-                    result.target = m
-                    result.Execute = [
-                        result.Assign,
-                        result.Add,
-                        result.Subtract,
-                        result.Multiply,
-                        result.Divide,
-                    ]["=+-*/".index(c)]
-                    return result
+                    return MemsetInstruction(d, m, c)
         self.__restore_state(state)
         return None
 
-    def parse_memory_access(self):
-        """_summary_
+    def __indirect_memory_access(self) -> int | list | None:
+        """Indirect memory access parsing. Can be as deeply nested as you want.
 
         Raises:
-            SyntaxError: _description_
+            SyntaxError: Raised if the syntax is incorrect.
 
         Returns:
-            list[int] | None: _description_
+            list[int] | None: Memory address or list of addresses parsed from the expression.
         """
         state = self.__save_state()
         if self.__skip_char("."):
-            d = self.__dec_int()
+            d: int | list | None = self.__dec_int()
             if d is None:
-                d = self.parse_memory_access()
+                d = self.__indirect_memory_access()
             if d is not None:
-                result = [d]
+                result: list = [d]
                 while self.__skip_char("!"):
-                    number = self.__dec_int()
+                    number: int | list | None = self.__dec_int()
                     if number is None:
-                        number = self.parse_memory_access()
+                        number = self.__indirect_memory_access()
                         if number is None:
                             raise SyntaxError("Expected decint after '!'")
                     result.append(number)
                 return result
         self.__restore_state(state)
+        return None
 
     def __dec_int(self) -> int | None:
         """Parse a decimal integer from the current position in the expression.
         If it is an integer, the scan position is advanced and the integer is returned.
 
         Returns:
-            int | None: Either the parsed integer or None if parsing fails. 
+            int | None: Either the parsed integer or None if parsing fails.
         """
         number: int = 0
         if self.__skip_char("_"):
@@ -642,7 +622,7 @@ class JustifParser:
         """
         c = self.__get_char()
         if ord(c) >= ord("0") and ord(c) <= ord("9"):
-            self.pos += 1
+            self.__pos += 1
             return True, ord(c) - ord("0")
         return False, 0
 
