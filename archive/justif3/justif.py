@@ -27,7 +27,8 @@ class Memory:
     def __init__(self):
         self.__memory: dict[int, int] = {}
 
-    def __getitem__(self, index: list[int]) -> int:
+    def __getitem__(self, index: int | list[int]) -> int:
+        
         offset = index[0]
         if type(offset) == type([]):
             offset = self.__memory[offset[0]]
@@ -40,7 +41,7 @@ class Memory:
                 result = result[offset]
             else:
                 result = result[memory[offset]]
-        logger.debug("GET memory[{}]={}", offset, result)
+        logger.warning("MEMORY: GOT [{!r}]={!r}", index, result)
         return result
 
     def __setitem__(self, index: int, value: int):
@@ -48,7 +49,7 @@ class Memory:
         if type(offset) == type([]):
             offset = self.__memory[offset[0]]
         self.__memory[offset] = value
-        logger.debug("SET memory[{}]={}", offset, value)
+        logger.warning("MEMORY: SET [{!r}]={!r}", offset, value)
         return 0
 
 
@@ -146,96 +147,6 @@ class Instruction:
         memory[self.target] /= self.Value(self.source, index)
         return memory[self.target]
 
-    def LessThan(self, index: int) -> int:
-        """_summary_
-
-        Args:
-            index (_type_): _description_
-
-        Returns:
-            _type_: _description_
-        """
-        a = self.Value(self.a, index)
-        b = self.Value(self.b, index)
-        logger.debug("Test if {} is less than {}", a, b)
-        return a < b
-
-    def Equal(self, index: int) -> int:
-        """_summary_
-
-        Args:
-            index (_type_): _description_
-
-        Returns:
-            _type_: _description_
-        """
-        return self.Value(self.a, index) == self.Value(self.b, index)
-
-    def GreaterThan(self, index: int) -> int:
-        """_summary_
-
-        Args:
-            index (_type_): _description_
-
-        Returns:
-            _type_: _description_
-        """
-        return self.Value(self.a, index) > self.Value(self.b, index)
-
-    def NotEqual(self, index: int) -> int:
-        return not (self.Value(self.a, index) == self.Value(self.b, index))
-
-    def Recurse(self, index: int) -> int:
-        """_summary_
-
-        Args:
-            index (_type_): _description_
-
-        Returns:
-            _type_: _description_
-        """
-        global root_sequence
-        logger.debug("Call self recursively with index {}", self.index)
-        return ExecuteInstructionSequence(root_sequence, self.index)
-
-    def Output(self, index: int) -> int:
-        """_summary_
-
-        Args:
-            index (_type_): _description_
-
-        Returns:
-            _type_: _description_
-        """
-        return 1, sys.stdout.write(chr(memory[self.address]))
-
-    def OutputInteger(self, *args) -> None:
-        """_summary_
-
-        Args:
-            index (_type_): _description_
-        """
-        logger.debug("Output integer at address {} using args {}", self.address, repr(args))
-        print(str(memory[self.address]))
-
-    def Constant(self, index: int) -> int:
-        """_summary_
-
-        Args:
-            index (_type_): _description_
-
-        Returns:
-            _type_: _description_
-        """
-        return self.value
-
-    def Input(self, index: int) -> int:
-        """_summary_
-
-        Args:
-            index (_type_): _description_
-        """
-        raise "ERROR, not implemented yet"
 
     def If(self, index: int) -> bool:
         if type(self.address) == type(self):
@@ -259,6 +170,121 @@ class Instruction:
         """
         return index == self.Value(self.value, index)
 
+
+class ConstantInstruction(Instruction):
+    """A class to represent a constant instruction in the Justif language
+    """
+    def __init__(self, decint: int):
+        self.__value: Final[int] = decint
+
+    def Execute(self, _: int) -> int:
+        """Execute the constant instruction.
+
+        Args:
+            index (int): *ignored*
+
+        Returns:
+            int: returns the constant value.
+        """
+        return self.__value
+
+class InputInstruction(Instruction):
+    """A class to represent an input instruction in the Justif language.
+    """
+    def __init__(self, address: int):
+        self.__address: Final[int] = address
+        """Address at which to store the input value."""
+        
+    def Execute(self, _: int) -> int:
+        """Execute the input instruction.
+
+        Args:
+            index (int): *ignored*
+        """
+        raise RuntimeError("Not implemented yet")
+
+class RecurseInstruction(Instruction):
+    """A class to represent a recursion instruction in the Justif language.
+    """
+    def __init__(self, index: int):
+        self.__index: Final[int] = index
+
+    def Execute(self, index: int) -> int:
+        """_summary_
+
+        Args:
+            index (_type_): _description_
+
+        Returns:
+            _type_: _description_
+        """
+        global root_sequence
+        logger.debug("Call self recursively with index {}", self.__index)
+        return ExecuteInstructionSequence(root_sequence, self.__index)
+
+class OutputCharInstruction(Instruction):
+    """A class to represent a char output instruction in the Justif language.
+    """
+    def __init__(self, address: int):
+        self.__value: Final[int] = address
+
+    def Execute(self, _: int) -> int:
+        """_summary_
+
+        Args:
+            index (int): *ignored*
+
+        Returns:
+            int: returns 1 always, indicating successful execution.
+        """
+        sys.stdout.write(chr(memory[self.__value]))
+        return 1
+
+class OutputIntegerInstruction(Instruction):
+    """A class to represent a char output instruction in the Justif language.
+    """
+    def __init__(self, address: int):
+        self.__value: Final[int] = address
+
+    def Execute(self, _: int) -> int:
+        """_summary_
+
+        Args:
+            index (int): *ignored*
+
+        Returns:
+            int: returns 1 always, indicating successful execution.
+        """
+        sys.stdout.write(str(memory[self.__value]))
+        return 1
+
+class ComparisonInstruction(Instruction):
+    """A class to represent a char output instruction in the Justif language.
+    """
+    def __init__(self, first: int, second: int, method_to_execute: str):
+        self.__first: Final[int] = first
+        self.__second: Final[int] = second
+        self.__method_to_execute: Final[str] = method_to_execute
+
+    def Execute(self, index: int) -> int:
+        a = self.Value(self.__first, index)
+        b = self.Value(self.__second, index)
+        match self.__method_to_execute:
+            case '+':
+                logger.debug("Executing less than comparison: {} < {}", a, b)
+                return a < b
+            case '-':
+                logger.debug("Executing equal to comparison: {} == {}", a, b)
+                return a == b
+            case '*':
+                logger.debug("Executing greater than comparison: {} > {}", a, b)
+                return a > b
+            case '/':
+                logger.debug("Executing not equal to comparison: {} != {}", a, b)
+                return a != b
+            case _:
+                logger.error("Unknown comparison method: {}", self.__method_to_execute)
+                raise RuntimeError(f"Unknown comparison method: {self.__method_to_execute}")
 
 def ExecuteInstructionSequence(instructions: list[Instruction], index: int) -> int:
     """Execute a sequence of instructions.
@@ -297,58 +323,54 @@ class JustifParser:
         self.expression = expression
         self.pos = 0
         self.__nums = [-1, -1]
-        return self.INSTRUCTIONS()
+        return self.__parse_instructions()
 
-    def SkipWhitespaces(self):
-        """_summary_"""
+    def __skip_whitespaces(self) -> None:
+        """Skip whitespace characters in the expression.
+        This method advances the position in the expression until a non-whitespace character is found."""
         try:
             while (
                 self.expression[self.pos]
                 in " \r\nABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
             ):
                 self.pos += 1
-        except:
+        except IndexError:
             pass
 
-    def PushPos(self):
-        """_summary_
+    def __save_state(self) -> tuple[int, list[int]]:
+        """Push the current parser position and intermediate numbers onto a stack.
 
         Returns:
-            _type_: _description_
+            tuple[int, list[int]]: (current position, copy of __nums)
         """
         return self.pos, self.__nums[:]
 
-    def PopPos(self, s):
-        """_summary_
+    def __restore_state(self, previously_saved_pos: tuple[int, list[int]]) -> None:
+        """Restore the previously saved position and numbers from a local variable
 
         Args:
-            s (_type_): _description_
+            s (_tytuple[int, list[int]]pe_):(previous position, copy of previous __nums)
         """
-        self.pos = s[0]
-        self.__nums = s[1]
+        self.pos = previously_saved_pos[0]
+        self.__nums = previously_saved_pos[1]
 
-    def GetChar(self, pos: int=0) -> str:
-        """_summary_
-
-        Args:
-            pos (int, optional): _description_. Defaults to 0.
+    def __get_char(self) -> str:
+        """Get the character at the current position
 
         Returns:
-            _type_: _description_
+            str: character at the current position or '\0' if out of bounds.
         """
-        self.SkipWhitespaces()
+        self.__skip_whitespaces()
         try:
-            result = self.expression[self.pos + pos]
+            result = self.expression[self.pos]
             assert isinstance(result, str), "Expected a string character"
             logger.debug("GetChar: {!r}", result)
             return result
         except IndexError:
             pass
-        except:
-            logger.exception("GetChar failed at position {}", self.pos + pos)
         return '\0'
 
-    def parser_skip_char(self, expression: str) -> bool:
+    def __skip_char(self, expression: str) -> bool:
         """_summary_
 
         Args:
@@ -357,7 +379,7 @@ class JustifParser:
         Returns:
             _type_: _description_
         """
-        self.SkipWhitespaces()
+        self.__skip_whitespaces()
         try:
             if self.expression[self.pos : self.pos + len(expression)] == expression:
                 self.pos += len(expression)
@@ -367,9 +389,9 @@ class JustifParser:
         return False
 
     def ISINDEX(self):
-        pos = self.PushPos()
-        if self.parser_skip_char("~"):
-            value = self.parse_dec_int()
+        state = self.__save_state()
+        if self.__skip_char("~"):
+            value = self.__dec_int()
             if value is None:
                 value = self.parse_memory_access()
             if value is not None:
@@ -377,44 +399,36 @@ class JustifParser:
                 result.value = value
                 result.Execute = result.IsIndex
                 return result
-        self.PopPos(pos)
+        self.__restore_state(state)
 
-    def COMPARE(self):
-        pos = self.PushPos()
-        c = self.GetChar()
+    def __cmp_instruction(self) -> Instruction | None:
+        state = self.__save_state()
+        c = self.__get_char()
         if c in "+-*/":
             self.pos += 1
             m = self.parse_memory_access()
-            if m is not None and self.parser_skip_char("="):
-                v = self.parse_dec_int()
+            if m is not None and self.__skip_char("="):
+                v = self.__dec_int()
                 if v is None:
                     v = self.parse_memory_access()
                 if v is not None:
-                    result = Instruction()
-                    result.a = m
-                    result.b = v
-                    result.Execute = [
-                        result.LessThan,
-                        result.Equal,
-                        result.GreaterThan,
-                        result.NotEqual,
-                    ]["+-*/".index(c)]
-                    return result
-        self.PopPos(pos)
+                    return ComparisonInstruction(m, v, c)
+        self.__restore_state(state)
+        return None
 
     def IF(self):
-        pos = self.PushPos()
+        state = self.__save_state()
         m = self.parse_memory_access()
         if m is None:
-            m = self.COMPARE()
+            m = self.__cmp_instruction()
         if m is None:
-            m = self.RECURSION()
+            m = self.__recursion()
         if m is None:
             m = self.ISINDEX()
-        if m is not None and self.parser_skip_char("?"):
-            if_true = self.INSTRUCTIONS()
-            if if_true and self.parser_skip_char(":"):
-                if_false = self.INSTRUCTIONS()
+        if m is not None and self.__skip_char("?"):
+            if_true = self.__parse_instructions()
+            if if_true and self.__skip_char(":"):
+                if_false = self.__parse_instructions()
                 if if_false:
                     result = Instruction()
                     result.address = m
@@ -422,106 +436,134 @@ class JustifParser:
                     result.if_false = if_false
                     result.Execute = result.If
                     return result
-        self.PopPos(pos)
+        self.__restore_state(state)
 
-    def INPUT(self):
-        pos = self.PushPos()
-        if self.parser_skip_char("<"):
+    def __io_input(self) -> InputInstruction | None:
+        """Parse an input instruction from the expression.
+
+        Returns:
+            InputInstruction | None: An InputInstruction if a valid input is found, otherwise None.
+        """
+        state = self.__save_state()
+        if self.__skip_char("<"):
             address = self.parse_memory_access()
             if address:
-                result = Instruction()
-                result.address = address
-                result.Execute = result.Input
-                return result
-        self.PopPos(pos)
+                return InputInstruction(address)
+        self.__restore_state(state)
+        return None
 
-    def OUTPUT(self):
-        pos = self.PushPos()
-        if self.parser_skip_char(">"):
-            address = self.parse_memory_access()
-            if address:
-                result = Instruction()
-                result.address = address
-                result.Execute = result.Output
-                return result
-        elif self.parser_skip_char("!"):
-            address = self.parse_memory_access()
-            if address:
-                result = Instruction()
-                result.address = address
-                result.Execute = result.OutputInteger
-                return result
-        self.PopPos(pos)
+    def __io_output(self) -> Instruction | None:
+        """Parse an output instruction from the expression.
 
-    def INSTRUCTIONS(self):
-        pos = self.PushPos()
-        instruction = self.INSTRUCTION()
+        Returns:
+            Instruction | None: An OutputCharInstruction or OutputIntegerInstruction if a valid output is found, otherwise None.
+        """
+        state = self.__save_state()
+        if self.__skip_char(">"):
+            address = self.parse_memory_access()
+            if address is not None:
+                return OutputCharInstruction(address)
+
+        elif self.__skip_char("!"):
+            address = self.parse_memory_access()
+            if address is not None:
+                return OutputIntegerInstruction(address)
+
+        self.__restore_state(state)
+        return None
+
+    def __parse_instructions(self) -> list[Instruction] | None:
+        """Return a list of instructions parsed from the expression.
+
+        Returns:
+            list[Instruction] | None: A list of instructions if valid instructions are found, otherwise None.
+        """
+        state = self.__save_state()
+        instruction = self.__parse_single_instruction()
         if instruction:
             result = []
             while 1:
                 result.append(instruction)
-                if self.parser_skip_char(","):
-                    instruction = self.INSTRUCTION()
+                if self.__skip_char(","):
+                    instruction = self.__parse_single_instruction()
                     if instruction:
                         continue
                 break
             return result
-        self.PopPos(pos)
+        self.__restore_state(state)
+        return None
 
-    def INSTRUCTION(self):
-        pos = self.PushPos()
+    def __parse_single_instruction(self) -> Instruction | None:
+        """Parse a single instruction from the expression.
+
+        Returns:
+            Instruction | None: An Instruction if a valid instruction is found, otherwise None.
+        """
+        state = self.__save_state()
         for function in (
             self.IF,
-            self.COMPARE,
-            self.RECURSION,
-            self.MEMSET,
-            self.OUTPUT,
-            self.INPUT,
-            self.CONSTANT,
+            self.__cmp_instruction,
+            self.__recursion,
+            self.__memset,
+            self.__io_output,
+            self.__io_input,
+            self.__parse_constant,
         ):
             instruction = function()
             if instruction is not None:
                 return instruction
-        self.PopPos(pos)
+        self.__restore_state(state)
 
-    def CONSTANT(self):
-        decint = self.parse_dec_int()
+    def __parse_constant(self) -> Instruction | None:
+        """Parse a constant value from the expression.
+
+        Returns:
+            Instruction | None: A ConstantInstruction if a valid constant is found, otherwise None.
+        """
+        decint = self.__dec_int()
         if decint is not None:
-            result = Instruction()
-            result.value = decint
-            result.Execute = result.Constant
-            return result
+            logger.debug("Parsed constant value: {}", decint)
+            return ConstantInstruction(decint)
+        return None
 
     def STRING(self):
-        if self.parser_skip_char('"'):
+        if self.__skip_char('"'):
             startpos = self.pos
             while 1:
-                c = self.GetChar()
+                c = self.__get_char()
                 if c == 0:
-                    raise "ERROR, expected end-of-string"
+                    raise SyntaxError("Expected end-of-string")
                 self.pos += 1
                 if c == '"':
                     return self.expression[startpos : self.pos - 1]
 
-    def RECURSION(self):
-        pos = self.PushPos()
-        if self.parser_skip_char("="):
-            index = self.parse_dec_int()
-            if index is not None:
-                result = Instruction()
-                result.index = index
-                result.Execute = result.Recurse
-                return result
-        self.PopPos(pos)
+    def __recursion(self) -> Instruction | None:
+        """_summary_
 
-    def MEMSET(self):
-        pos = self.PushPos()
+        Returns:
+            Instruction | None: 
+        """
+        state = self.__save_state()
+        if self.__skip_char("="):
+            index = self.__dec_int()
+            if index is not None:
+                return RecurseInstruction(index)
+        self.__restore_state(state)
+        return None
+
+    def __memset(self) -> Instruction | None:
+        """_summary_
+
+        Returns:
+            Instruction | None: _description_
+        """
+        state = self.__save_state()
         m = self.parse_memory_access()
         if m:
-            c = self.GetChar()
+            c = self.__get_char()
             if c in "=+-*/":
                 self.pos += 1
-                d = self.parse_dec_int()
+                d = self.__dec_int()
                 if d is None:
                     d = self.STRING()
                 if d is None:
@@ -539,7 +581,8 @@ class JustifParser:
                         result.Divide,
                     ]["=+-*/".index(c)]
                     return result
-        self.PopPos(pos)
+        self.__restore_state(state)
+        return None
 
     def parse_memory_access(self):
         """_summary_
@@ -550,24 +593,24 @@ class JustifParser:
         Returns:
             list[int] | None: _description_
         """
-        pos = self.PushPos()
-        if self.parser_skip_char("."):
-            d = self.parse_dec_int()
+        state = self.__save_state()
+        if self.__skip_char("."):
+            d = self.__dec_int()
             if d is None:
                 d = self.parse_memory_access()
             if d is not None:
                 result = [d]
-                while self.parser_skip_char("!"):
-                    number = self.parse_dec_int()
+                while self.__skip_char("!"):
+                    number = self.__dec_int()
                     if number is None:
                         number = self.parse_memory_access()
                         if number is None:
                             raise SyntaxError("Expected decint after '!'")
                     result.append(number)
                 return result
-        self.PopPos(pos)
+        self.__restore_state(state)
 
-    def parse_dec_int(self) -> int | None:
+    def __dec_int(self) -> int | None:
         """Parse a decimal integer from the current position in the expression.
         If it is an integer, the scan position is advanced and the integer is returned.
 
@@ -575,29 +618,29 @@ class JustifParser:
             int | None: Either the parsed integer or None if parsing fails. 
         """
         number: int = 0
-        if self.parser_skip_char("_"):
+        if self.__skip_char("_"):
             return self.__nums[0]
-        if self.parser_skip_char("$"):
+        if self.__skip_char("$"):
             return self.__nums[1]
-        success, digit = self.parse_dec_digit()
+        success, digit = self.__dec_digit()
         if not success:
             return None
 
         while success:
             number *= 10
             number += digit
-            success, digit = self.parse_dec_digit()
+            success, digit = self.__dec_digit()
         self.__nums[1] = self.__nums[0]
         self.__nums[0] = number
         return number
 
-    def parse_dec_digit(self) -> tuple[bool, int]:
+    def __dec_digit(self) -> tuple[bool, int]:
         """Check if the current character is a decimal digit and if so, return its value.
 
         Returns:
             tuple[bool, int]: (success, digit_value)
         """
-        c = self.GetChar()
+        c = self.__get_char()
         if ord(c) >= ord("0") and ord(c) <= ord("9"):
             self.pos += 1
             return True, ord(c) - ord("0")
