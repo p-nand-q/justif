@@ -1,6 +1,7 @@
 #! /usr/bin/python
 import sys
 from typing import Final
+from abc import ABC, abstractmethod
 
 import typer
 from loguru import logger
@@ -27,7 +28,7 @@ class Memory:
     def __init__(self):
         self.__memory: dict[int, int] = {}
 
-    def __getitem__(self, index: int | list[int]) -> int:
+    def __getitem__(self, index: int | str | list) -> int:
 
         offset = index[0]
         if type(offset) == type([]):
@@ -41,15 +42,15 @@ class Memory:
                 result = result[offset]
             else:
                 result = result[memory[offset]]
-        logger.warning("MEMORY: GOT [{!r}]={!r}", index, result)
+        logger.debug("MEMORY: GOT [{!r}]={!r}", index, result)
         return result
 
-    def __setitem__(self, index: int, value: int):
+    def __setitem__(self, index: int | str | list, value: int):
         offset = index[0]
         if type(offset) == type([]):
             offset = self.__memory[offset[0]]
         self.__memory[offset] = value
-        logger.warning("MEMORY: SET [{!r}]={!r}", offset, value)
+        logger.debug("MEMORY: SET [{!r}]={!r}", offset, value)
         return 0
 
 
@@ -57,8 +58,29 @@ memory: Final[Memory] = Memory()
 root_sequence: list = []  # This will hold the root sequence of instructions.
 
 
-class Instruction:
+class ExecutionContext:
+    """A class to represent the execution context of the Justif language."""
+
+    def __init__(self, root_sequence):
+        self.memory: Memory = Memory()
+        self.index: int = 0
+        self.root_sequence: list[Instruction] = root_sequence
+
+
+
+class Instruction(ABC):
     """A class to represent an instruction in the Justif language."""
+
+    @abstractmethod
+    def Execute(self, index: int) -> int:
+        """Execute the instruction.
+
+        Args:
+            index (int): Optional index
+
+        Returns:
+            int: An integer that *MAY* have meaning in the context of the instruction.
+        """
 
     def Value(self, data: int | str | list, index: int):
         """_summary_
@@ -70,7 +92,7 @@ class Instruction:
         Returns:
             _type_: _description_
         """
-        logger.info(
+        logger.debug(
             "Value called with data={} of type {} and index={}", data, type(data), index
         )
         if type(data) == type(0):
@@ -86,18 +108,27 @@ class Instruction:
                 type(self.source)
             )
 
-    def If(self, index: int) -> bool:
-        if isinstance(self.address, Instruction) or type(self.address) == type(self):
-            result = self.address.Execute(index)
+class IfInstruction(Instruction):
+    """A class to represent a constant instruction in the Justif language"""
+
+    def __init__(self, instructions_if_true: list[Instruction], instructions_if_false: list[Instruction], address: int | str | list | Instruction):
+        self.__address: Final[int | str | list | Instruction] = address
+        self.__instructions_if_true: list[Instruction] = instructions_if_true
+        self.__instructions_if_false: list[Instruction] = instructions_if_false
+
+    def Execute(self, index: int) -> int:
+        if isinstance(self.__address, Instruction):
+            logger.debug("Executing IF-Expression  {!r}=> INSTRUCTION", self.__address)
+            result = self.__address.Execute(index)
         else:
-            result = memory[self.address]
-        logger.debug("IF-Expression is {}", result)
+            logger.debug("Executing IF-Expression  {!r}=> NOT INSTRUCTION", self.__address)
+            result = memory[self.__address]
+        logger.debug("IF-Expression is {}, execute {}", result, self.__instructions_if_true if result else self.__instructions_if_false)
         if result:
-            return ExecuteInstructionSequence(self.if_true, index)
+            return ExecuteInstructionSequence(self.__instructions_if_true, index)
         else:
-            return ExecuteInstructionSequence(self.if_false, index)
-
-
+            return ExecuteInstructionSequence(self.__instructions_if_false, index)
+    
 class CheckIndexInstruction(Instruction):
     """A class to represent a constant instruction in the Justif language"""
 
@@ -172,8 +203,8 @@ class RecurseInstruction(Instruction):
 class OutputCharInstruction(Instruction):
     """A class to represent a char output instruction in the Justif language."""
 
-    def __init__(self, address: int):
-        self.__value: Final[int] = address
+    def __init__(self, address: int | str | list):
+        self.__value: Final[int | str | list] = address
 
     def Execute(self, _: int) -> int:
         """_summary_
@@ -191,8 +222,8 @@ class OutputCharInstruction(Instruction):
 class OutputIntegerInstruction(Instruction):
     """A class to represent a char output instruction in the Justif language."""
 
-    def __init__(self, address: int):
-        self.__value: Final[int] = address
+    def __init__(self, address: int | str | list):
+        self.__value: Final[int | str | list] = address
 
     def Execute(self, _: int) -> int:
         """_summary_
@@ -203,7 +234,7 @@ class OutputIntegerInstruction(Instruction):
         Returns:
             int: returns 1 always, indicating successful execution.
         """
-        sys.stdout.write(str(memory[self.__value]))
+        print(str(memory[self.__value]))
         return 1
 
 
@@ -243,9 +274,9 @@ class ComparisonInstruction(Instruction):
 class MemsetInstruction(Instruction):
     """A class to represent a char output instruction in the Justif language."""
 
-    def __init__(self, source: int | str, target: int, method_to_execute: str):
-        self.__source: Final[int | str] = source
-        self.__target: Final[int] = target
+    def __init__(self, source: int | str | list, target: int | str | list, method_to_execute: str):
+        self.__source: Final[int | str | list] = source
+        self.__target: Final[int | str | list] = target
         self.__method_to_execute: Final[str] = method_to_execute
 
     def Execute(self, index: int) -> int:
@@ -397,9 +428,14 @@ class JustifParser:
         self.__restore_state(state)
         return None
 
-    def IF(self):
+    def __if(self) -> Instruction | None:
+        """Parse an if instruction from the expression.
+
+        Returns:
+            Instruction | None: An IfInstruction if a valid if condition is found, otherwise None.
+        """
         state = self.__save_state()
-        m: int | str | list | Instruction = self.__indirect_memory_access()
+        m: int | str | list | Instruction | None = self.__indirect_memory_access()
         if m is None:
             m = self.__cmp_instruction()
         if m is None:
@@ -411,13 +447,9 @@ class JustifParser:
             if if_true and self.__skip_char(":"):
                 if_false = self.__parse_instructions()
                 if if_false:
-                    result = Instruction()
-                    result.address = m
-                    result.if_true = if_true
-                    result.if_false = if_false
-                    result.Execute = result.If
-                    return result
+                    return IfInstruction(if_true, if_false, m)
         self.__restore_state(state)
+        return None
 
     def __io_input(self) -> InputInstruction | None:
         """Parse an input instruction from the expression.
@@ -441,12 +473,12 @@ class JustifParser:
         """
         state = self.__save_state()
         if self.__skip_char(">"):
-            address = self.__indirect_memory_access()
+            address: int | str | list = self.__indirect_memory_access()
             if address is not None:
                 return OutputCharInstruction(address)
 
         elif self.__skip_char("!"):
-            address = self.__indirect_memory_access()
+            address: int | str | list = self.__indirect_memory_access()
             if address is not None:
                 return OutputIntegerInstruction(address)
 
@@ -482,7 +514,7 @@ class JustifParser:
         """
         state = self.__save_state()
         for function in (
-            self.IF,
+            self.__if,
             self.__cmp_instruction,
             self.__recursion,
             self.__memset,
@@ -494,6 +526,7 @@ class JustifParser:
             if instruction is not None:
                 return instruction
         self.__restore_state(state)
+        return None
 
     def __parse_constant(self) -> Instruction | None:
         """Parse a constant value from the expression.
