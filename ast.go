@@ -56,6 +56,13 @@ type MemoryAccess struct {
 
 func (m *MemoryAccess) node() {}
 
+// MemoryAccessNew represents the new memory access model
+type MemoryAccessNew struct {
+	EffectiveAddr *EffectiveAddress
+}
+
+func (m *MemoryAccessNew) node() {}
+
 type CompareNode struct {
 	Operation string // "+", "-", "*", "/"
 	Left      *MemoryAccess

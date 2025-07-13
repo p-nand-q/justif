@@ -21,6 +21,7 @@ func (d *DefineFlags) Set(value string) error {
 func main() {
 	var (
 		useOPP  = flag.Bool("opp", false, "Enable OPP preprocessing")
+		debugParser = flag.Bool("debug-parser", false, "Run parser debug tests")
 		defines DefineFlags
 	)
 	
@@ -33,6 +34,42 @@ func main() {
 	}
 	
 	flag.Parse()
+	
+	if *debugParser {
+		runDebugParser()
+		return
+	}
+	
+	// Add special case for tracing atoi
+	if flag.NArg() > 0 && flag.Arg(0) == "trace-atoi" {
+		traceAtoi()
+		return
+	}
+	
+	if flag.NArg() > 0 && flag.Arg(0) == "test-simple" {
+		testAtoiSimple()
+		return
+	}
+	
+	if flag.NArg() > 0 && flag.Arg(0) == "test-dollar" {
+		testDollarMem()
+		return
+	}
+	
+	if flag.NArg() > 0 && flag.Arg(0) == "trace-parse" {
+		traceParseNums()
+		return
+	}
+	
+	if flag.NArg() > 0 && flag.Arg(0) == "debug-ast" {
+		debugAST()
+		return
+	}
+	
+	if flag.NArg() > 0 && flag.Arg(0) == "debug-dollar" {
+		debugDollarResolution()
+		return
+	}
 	
 	if flag.NArg() < 1 {
 		flag.Usage()
@@ -71,6 +108,7 @@ func main() {
 		fmt.Fprintf(os.Stderr, "Parse error: %v\n", err)
 		os.Exit(1)
 	}
+	
 
 	interpreter := NewInterpreter()
 	err = interpreter.Execute(ast)

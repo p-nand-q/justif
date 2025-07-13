@@ -309,10 +309,7 @@ Converts the string "1182" to an integer and prints it. Demonstrates:
 Note: Uses complex nested conditions and may need adjustment for full compatibility.
 
 ### counter.justif
-A simple counter program that prints numbers 1 through 5 with newlines. Good for understanding basic recursion and comparison operations.
+A simple counter program that demonstrates basic counting operations.
 
-### Various test files
-- `test_fib.justif`, `fib_test2.justif` - Fibonacci variations for testing
-- `atoi_simple.justif`, `atoi_test2.justif` - Simplified atoi versions
-- `const_test.justif` - Tests constant number handling
-- `nested_if.justif` - Tests nested IF statements
+### const_test.justif
+Tests constant number handling and return values.

@@ -90,6 +90,7 @@ func (p *Parser) INSTRUCTION() Instruction {
 	// IF handles COMPARE and other conditions internally
 	instructionParsers := []func()Instruction{
 		p.IF,
+		p.COMPARE_AS_INSTRUCTION,  // Add this to handle comparisons as instructions
 		p.RECURSION,
 		p.MEMSET,
 		p.OUTPUT,
@@ -104,6 +105,16 @@ func (p *Parser) INSTRUCTION() Instruction {
 	}
 	
 	p.PopPos(pos, nums)
+	return nil
+}
+
+// COMPARE_AS_INSTRUCTION tries to parse a comparison as an instruction
+func (p *Parser) COMPARE_AS_INSTRUCTION() Instruction {
+	if cmp := p.COMPARE(); cmp != nil {
+		if compareNode, ok := cmp.(*CompareNode); ok {
+			return &CompareInstruction{Compare: compareNode}
+		}
+	}
 	return nil
 }
 
@@ -134,6 +145,8 @@ func (p *Parser) IF() Instruction {
 			if falseInst == nil {
 				falseInst = []Instruction{}
 			}
+			
+			
 			return &IfInstruction{
 				Condition:         condition,
 				TrueInstructions:  trueInst,

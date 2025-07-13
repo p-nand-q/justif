@@ -25,6 +25,7 @@ func (i *Interpreter) Execute(program *Program) error {
 
 func (i *Interpreter) ExecuteInstructionSequence(instructions []Instruction, index int) (int, error) {
 	result := 0
+	// fmt.Printf("DEBUG: Executing %d instructions at index %d\n", len(instructions), index)
 	for _, inst := range instructions {
 		val, err := i.ExecuteInstruction(inst, index)
 		if err != nil {
@@ -44,13 +45,24 @@ func (i *Interpreter) ExecuteInstruction(inst Instruction, index int) (int, erro
 		if err != nil {
 			return 0, err
 		}
-		return i.ExecuteInstructionSequence(i.program.Instructions, idx)
+		result, err := i.ExecuteInstructionSequence(i.program.Instructions, idx)
+		return result, err
 	case *MemsetInstruction:
 		return i.ExecuteMemset(instr, index)
 	case *OutputInstruction:
 		return i.ExecuteOutput(instr, index)
 	case *ConstantInstruction:
 		return i.Value(instr.Value, index)
+	case *CompareInstruction:
+		// Execute comparison and return boolean result (0 or 1)
+		result, err := i.EvaluateCondition(instr.Compare, index)
+		if err != nil {
+			return 0, err
+		}
+		if result {
+			return 1, nil
+		}
+		return 0, nil
 	case *NoOpInstruction:
 		return 0, nil
 	default:
@@ -75,6 +87,7 @@ func (i *Interpreter) ExecuteMemset(instr *MemsetInstruction, index int) (int, e
 	if err != nil {
 		return 0, err
 	}
+	// fmt.Printf("DEBUG: Memset cell %d with operation %s\n", targetIndex, instr.Operation)
 
 	// Handle different value types
 	switch val := instr.Value.(type) {
@@ -86,6 +99,29 @@ func (i *Interpreter) ExecuteMemset(instr *MemsetInstruction, index int) (int, e
 		return 0, fmt.Errorf("cannot perform %s operation on string", instr.Operation)
 		
 	case *MemoryAccess:
+		// Check if this is character access
+		if val.CharIndex != nil {
+			cellIndex, err := i.GetMemoryIndex(val, index)
+			if err != nil {
+				return 0, err
+			}
+			charIndex, err := i.Value(val.CharIndex, index)
+			if err != nil {
+				return 0, err
+			}
+			charValue, err := i.memory.GetChar(cellIndex, charIndex)
+			if err != nil {
+				return 0, err
+			}
+			// For character access, we always get an int value
+			if instr.Operation == "=" {
+				i.memory.Set(targetIndex, charValue)
+				return 0, nil
+			}
+			return 0, i.memory.ApplyOperation(targetIndex, instr.Operation, charValue)
+		}
+		
+		// Regular memory access without character index
 		sourceIndex, err := i.GetMemoryIndex(val, index)
 		if err != nil {
 			return 0, err
@@ -141,6 +177,10 @@ func (i *Interpreter) ExecuteOutput(instr *OutputInstruction, index int) (int, e
 		memIndex, err := i.GetMemoryIndex(instr.Memory, index)
 		if err != nil {
 			return 0, err
+		}
+		// Debug: what are we outputting?
+		if false { // Enable for debugging
+			fmt.Printf("[DEBUG: outputting memory[%d] = %v]\n", memIndex, i.memory.Get(memIndex))
 		}
 		val := i.memory.Get(memIndex)
 		switch v := val.(type) {
@@ -246,13 +286,13 @@ func (i *Interpreter) EvaluateCondition(node Node, index int) (bool, error) {
 func (i *Interpreter) Value(node Node, index int) (int, error) {
 	switch n := node.(type) {
 	case *NumberNode:
-		if n.IsLast {
-			return i.nums[0], nil
+		// For _ and $, the value was resolved at parse time
+		// and stored in n.Value. We should use that, not the
+		// runtime nums array.
+		if n.IsLast || n.IsBefore {
+			return n.Value, nil
 		}
-		if n.IsBefore {
-			return i.nums[1], nil
-		}
-		// Update tracking
+		// Update tracking for regular numbers
 		i.nums[1] = i.nums[0]
 		i.nums[0] = n.Value
 		return n.Value, nil
