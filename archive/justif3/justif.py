@@ -45,7 +45,8 @@ class Memory:
         logger.debug("MEMORY: GOT [{!r}]={!r}", index, result)
         return result
 
-    def __setitem__(self, index: int | str | list, value: int):
+    def set_memory_value(self, index: list, value: int):
+        logger.critical("MEMORY: SET [{!r}]={!r}", index, value)
         offset = index[0]
         if type(offset) == type([]):
             offset = self.__memory[offset[0]]
@@ -282,20 +283,25 @@ class MemsetInstruction(Instruction):
     def Execute(self, index: int) -> int:
         match self.__method_to_execute:
             case "=":
-                memory[self.__target] = self.Value(self.__source, index)
-                return memory[self.__target]
+                return memory.set_memory_value(
+                    self.__target,
+                    self.Value(self.__source, index))
             case "+":
-                memory[self.__target] += self.Value(self.__source, index)
-                return memory[self.__target]
+                return memory.set_memory_value(
+                    self.__target,
+                    memory[self.__target] + self.Value(self.__source, index))
             case "-":
-                memory[self.__target] -= self.Value(self.__source, index)
-                return memory[self.__target]
+                return memory.set_memory_value(
+                    self.__target,
+                    memory[self.__target] - self.Value(self.__source, index))
             case "*":
-                memory[self.__target] *= self.Value(self.__source, index)
-                return memory[self.__target]
+                return memory.set_memory_value(
+                    self.__target,
+                    memory[self.__target] * self.Value(self.__source, index))
             case "/":
-                memory[self.__target] /= self.Value(self.__source, index)
-                return memory[self.__target]
+                return memory.set_memory_value(
+                    self.__target,
+                    memory[self.__target] / self.Value(self.__source, index))
             case _:
                 logger.error("Unknown memset method: {}", self.__method_to_execute)
                 raise RuntimeError(f"Unknown memset method: {self.__method_to_execute}")
@@ -379,7 +385,7 @@ class JustifParser:
         try:
             result = self.expression[self.__pos]
             assert isinstance(result, str), "Expected a string character"
-            logger.debug("GetChar: {!r}", result)
+            logger.debug("__get_char[{}]: {!r}", self.__pos, result)
             return result
         except IndexError:
             pass
@@ -596,7 +602,7 @@ class JustifParser:
         self.__restore_state(state)
         return None
 
-    def __indirect_memory_access(self) -> int | list | None:
+    def __indirect_memory_access(self) -> list | None:
         """Indirect memory access parsing. Can be as deeply nested as you want.
 
         Raises:
