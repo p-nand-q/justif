@@ -26,31 +26,31 @@ class Memory:
     """A simple memory class to store and retrieve values."""
 
     def __init__(self):
-        self.__memory: dict[int, int] = {}
+        self.__ram: dict[int, int] = {}
 
-    def __getitem__(self, index: int | str | list) -> int:
-
+    def get_memory_value(self, index: list) -> int:
+        logger.critical("MEMORY: GET [{!r}]", index)
         offset = index[0]
         if type(offset) == type([]):
-            offset = self.__memory[offset[0]]
-        if offset not in self.__memory:
-            self.__memory[offset] = 0
-        result = self.__memory[offset]
+            offset = self.__ram[offset[0]]
+        if offset not in self.__ram:
+            self.__ram[offset] = 0
+        result = self.__ram[offset]
         if len(index) == 2:
             offset = index[1]
             if type(offset) == type(0):
                 result = result[offset]
             else:
-                result = result[memory[offset]]
+                result = result[self.get_memory_value(offset)]
         logger.debug("MEMORY: GOT [{!r}]={!r}", index, result)
         return result
 
-    def set_memory_value(self, index: list, value: int):
-        logger.critical("MEMORY: SET [{!r}]={!r}", index, value)
+    def set_memory_value(self, index: list, value: int) -> int:
+        #logger.critical("MEMORY: SET [{!r}]={!r}", index, value)
         offset = index[0]
         if type(offset) == type([]):
-            offset = self.__memory[offset[0]]
-        self.__memory[offset] = value
+            offset = self.__ram[offset[0]]
+        self.__ram[offset] = value
         logger.debug("MEMORY: SET [{!r}]={!r}", offset, value)
         return 0
 
@@ -83,7 +83,7 @@ class Instruction(ABC):
             int: An integer that *MAY* have meaning in the context of the instruction.
         """
 
-    def Value(self, data: int | str | list, index: int):
+    def get_value(self, data: list | "Instruction", index: int) -> int | list[int]:
         """_summary_
 
         Args:
@@ -91,29 +91,26 @@ class Instruction(ABC):
             index (_type_): _description_
 
         Returns:
-            _type_: _description_
+            int | list[int]: returns either the raw "byte" (int), or a list of raw "bytes" (int).
         """
-        logger.debug(
-            "Value called with data={} of type {} and index={}", data, type(data), index
-        )
-        if type(data) == type(0):
-            return data
-        elif type(data) == type(""):
-            return list([ord(c) for c in data]) + [0]
-        elif type(data) == type([]):
-            return memory[data]
-        elif type(data) == type(self):
-            return data.Execute(index)
-        else:
-            raise "ERROR, expected type int, string or Instruction for assignment but got %s instead" % str(
-                type(self.source)
-            )
+        match data:
+            case int():
+                return data
+            case str():
+                return list([ord(c) for c in data]) + [0]
+            case list():
+                # aha! list is somewhat our marker for "begin an effective address"
+                return memory.get_memory_value(data)
+            case _ if isinstance(data, Instruction):
+                return data.Execute(index)
+            case _:
+                raise RuntimeError(f"Bad type {type(data)} for assignment")
 
 class IfInstruction(Instruction):
     """A class to represent a constant instruction in the Justif language"""
 
-    def __init__(self, instructions_if_true: list[Instruction], instructions_if_false: list[Instruction], address: int | str | list | Instruction):
-        self.__address: Final[int | str | list | Instruction] = address
+    def __init__(self, instructions_if_true: list[Instruction], instructions_if_false: list[Instruction], address: list | Instruction):
+        self.__address: Final[list | Instruction] = address
         self.__instructions_if_true: list[Instruction] = instructions_if_true
         self.__instructions_if_false: list[Instruction] = instructions_if_false
 
@@ -123,7 +120,7 @@ class IfInstruction(Instruction):
             result = self.__address.Execute(index)
         else:
             logger.debug("Executing IF-Expression  {!r}=> NOT INSTRUCTION", self.__address)
-            result = memory[self.__address]
+            result = memory.get_memory_value(self.__address)
         logger.debug("IF-Expression is {}, execute {}", result, self.__instructions_if_true if result else self.__instructions_if_false)
         if result:
             return ExecuteInstructionSequence(self.__instructions_if_true, index)
@@ -133,8 +130,8 @@ class IfInstruction(Instruction):
 class CheckIndexInstruction(Instruction):
     """A class to represent a constant instruction in the Justif language"""
 
-    def __init__(self, value: int | str | list):
-        self.__value: Final[int | str | list] = value
+    def __init__(self, value: list):
+        self.__value: Final[list] = value
 
     def Execute(self, index: int) -> int:
         """Execute the constant instruction.
@@ -145,7 +142,7 @@ class CheckIndexInstruction(Instruction):
         Returns:
             int: returns the constant value.
         """
-        return index == self.Value(self.__value, index)
+        return index == self.get_value(self.__value, index)
     
 class ConstantInstruction(Instruction):
     """A class to represent a constant instruction in the Justif language"""
@@ -204,8 +201,8 @@ class RecurseInstruction(Instruction):
 class OutputCharInstruction(Instruction):
     """A class to represent a char output instruction in the Justif language."""
 
-    def __init__(self, address: int | str | list):
-        self.__value: Final[int | str | list] = address
+    def __init__(self, address: list):
+        self.__value: Final[list] = address
 
     def Execute(self, _: int) -> int:
         """_summary_
@@ -216,15 +213,15 @@ class OutputCharInstruction(Instruction):
         Returns:
             int: returns 1 always, indicating successful execution.
         """
-        sys.stdout.write(chr(memory[self.__value]))
+        sys.stdout.write(chr(memory.get_memory_value(self.__value)))
         return 1
 
 
 class OutputIntegerInstruction(Instruction):
     """A class to represent a char output instruction in the Justif language."""
 
-    def __init__(self, address: int | str | list):
-        self.__value: Final[int | str | list] = address
+    def __init__(self, address: list):
+        self.__value: Final[list] = address
 
     def Execute(self, _: int) -> int:
         """_summary_
@@ -235,7 +232,7 @@ class OutputIntegerInstruction(Instruction):
         Returns:
             int: returns 1 always, indicating successful execution.
         """
-        print(str(memory[self.__value]))
+        print(str(memory.get_memory_value(self.__value)))
         return 1
 
 
@@ -243,15 +240,15 @@ class ComparisonInstruction(Instruction):
     """A class to represent a char output instruction in the Justif language."""
 
     def __init__(
-        self, first: int | str | list, second: int | str | list, method_to_execute: str
+        self, first: list, second: list, method_to_execute: str
     ):
-        self.__first: Final[int | str | list] = first
-        self.__second: Final[int | str | list] = second
+        self.__first: Final[list] = first
+        self.__second: Final[list] = second
         self.__method_to_execute: Final[str] = method_to_execute
 
     def Execute(self, index: int) -> int:
-        a = self.Value(self.__first, index)
-        b = self.Value(self.__second, index)
+        a = self.get_value(self.__first, index)
+        b = self.get_value(self.__second, index)
         match self.__method_to_execute:
             case "+":
                 logger.debug("Executing less than comparison: {} < {}", a, b)
@@ -275,9 +272,9 @@ class ComparisonInstruction(Instruction):
 class MemsetInstruction(Instruction):
     """A class to represent a char output instruction in the Justif language."""
 
-    def __init__(self, source: int | str | list, target: int | str | list, method_to_execute: str):
-        self.__source: Final[int | str | list] = source
-        self.__target: Final[int | str | list] = target
+    def __init__(self, source: list, target: list, method_to_execute: str):
+        self.__source: Final[list] = source
+        self.__target: Final[list] = target
         self.__method_to_execute: Final[str] = method_to_execute
 
     def Execute(self, index: int) -> int:
@@ -285,23 +282,23 @@ class MemsetInstruction(Instruction):
             case "=":
                 return memory.set_memory_value(
                     self.__target,
-                    self.Value(self.__source, index))
+                    self.get_value(self.__source, index))
             case "+":
                 return memory.set_memory_value(
                     self.__target,
-                    memory[self.__target] + self.Value(self.__source, index))
+                    memory.get_memory_value(self.__target) + self.get_value(self.__source, index))
             case "-":
                 return memory.set_memory_value(
                     self.__target,
-                    memory[self.__target] - self.Value(self.__source, index))
+                    memory.get_memory_value(self.__target) - self.get_value(self.__source, index))
             case "*":
                 return memory.set_memory_value(
                     self.__target,
-                    memory[self.__target] * self.Value(self.__source, index))
+                    memory.get_memory_value(self.__target) * self.get_value(self.__source, index))
             case "/":
                 return memory.set_memory_value(
                     self.__target,
-                    memory[self.__target] / self.Value(self.__source, index))
+                    memory.get_memory_value(self.__target) // self.get_value(self.__source, index))
             case _:
                 logger.error("Unknown memset method: {}", self.__method_to_execute)
                 raise RuntimeError(f"Unknown memset method: {self.__method_to_execute}")
@@ -412,7 +409,7 @@ class JustifParser:
     def __is_index(self) :
         state = self.__save_state()
         if self.__skip_char("~"):
-            v: int | str | list | None  = self.__dec_int()
+            v: list | None  = self.__dec_int()
             if v is None:
                 v = self.__indirect_memory_access()
             if v is not None:
@@ -426,7 +423,7 @@ class JustifParser:
             self.__pos += 1
             m = self.__indirect_memory_access()
             if m is not None and self.__skip_char("="):
-                v: int | str | list | None = self.__dec_int()
+                v: list | None = self.__dec_int()
                 if v is None:
                     v = self.__indirect_memory_access()
                 if v is not None:
@@ -441,7 +438,7 @@ class JustifParser:
             Instruction | None: An IfInstruction if a valid if condition is found, otherwise None.
         """
         state = self.__save_state()
-        m: int | str | list | Instruction | None = self.__indirect_memory_access()
+        m: list | Instruction | None = self.__indirect_memory_access()
         if m is None:
             m = self.__cmp_instruction()
         if m is None:
@@ -479,12 +476,12 @@ class JustifParser:
         """
         state = self.__save_state()
         if self.__skip_char(">"):
-            address: int | str | list = self.__indirect_memory_access()
+            address: list = self.__indirect_memory_access()
             if address is not None:
                 return OutputCharInstruction(address)
 
         elif self.__skip_char("!"):
-            address: int | str | list = self.__indirect_memory_access()
+            address: list = self.__indirect_memory_access()
             if address is not None:
                 return OutputIntegerInstruction(address)
 
@@ -563,7 +560,9 @@ class JustifParser:
                     raise SyntaxError("Expected end-of-string")
                 self.__pos += 1
                 if c == '"':
-                    return self.expression[startpos : self.__pos - 1]
+                    result = self.expression[startpos : self.__pos - 1]
+                    logger.critical("Parsed string: {!r}", result)
+                    return result
         return None
 
     def __recursion(self) -> Instruction | None:
@@ -592,7 +591,7 @@ class JustifParser:
             c = self.__get_char()
             if c in "=+-*/":
                 self.__pos += 1
-                d: int | str | list | None = self.__dec_int()
+                d: list | None = self.__dec_int()
                 if d is None:
                     d = self.__string()
                 if d is None:
@@ -609,7 +608,7 @@ class JustifParser:
             SyntaxError: Raised if the syntax is incorrect.
 
         Returns:
-            list[int] | None: Memory address or list of addresses parsed from the expression.
+            list | None: Nested list. Can be a list of ints, or lists of ints, or lists of lis
         """
         state = self.__save_state()
         if self.__skip_char("."):
